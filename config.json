@@ -1,0 +1,10 @@
+{
+    "profile_name": "Default Profile",
+    "paths": {
+        "root_path": "D:/Art/Animation/PC",
+        "preset_txt_path": "D:/ohCHA_WorkSpaceManager/ohCHA_TaskHub/BB.json"
+    },
+    "rules": {
+        "character_folder": "/{타입1}/{타입2}/{스킨넘버}/"
+    }
+}

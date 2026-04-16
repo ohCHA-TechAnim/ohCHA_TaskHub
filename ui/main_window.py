@@ -852,12 +852,24 @@ class MainWindow(QMainWindow):
                 self.refresh_msg_presets()
 
     # ==========================================
-    # 🔥 OTA 자동 업데이트
+    # 🔥 OTA 자동 업데이트 (수정됨)
+    # ==========================================
+    # ==========================================
+    # 🔥 OTA 자동 업데이트 (수정됨)
     # ==========================================
     def check_for_updates(self):
         self.updater_thread = UpdateChecker()
         self.updater_thread.update_available.connect(self.prompt_update)
+        
+        # 🔥 에러가 발생하면 화면에 무조건 띄우도록 연결!
+        self.updater_thread.check_error.connect(self.show_update_error)
+        
         self.updater_thread.start()
+
+    @Slot(str)
+    def show_update_error(self, error_msg):
+        # 팝업으로 에러 원인을 적나라하게 보여줍니다.
+        QMessageBox.critical(self, "업데이트 통신 에러", error_msg)
 
     @Slot(str, str, str)
     def prompt_update(self, version, notes, download_url):

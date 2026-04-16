@@ -12,7 +12,7 @@ from PySide6.QtCore import QThread, Signal
 GITHUB_REPO = "ohCHA-TechAnim/ohCHA_TaskHub" 
 
 # 깃허브에 올릴 때는 이 숫자를 반드시 1.0.1 로 올려서 커밋해야 무한 루프에 빠지지 않습니다.
-CURRENT_VERSION = "1.0.2"
+CURRENT_VERSION = "1.0.3"
 
 # 현재 updater.py의 위치를 기반으로 앱의 최상위 폴더(main.py가 있는 곳)를 절대 경로로 찾습니다.
 BASE_DIR = Path(__file__).resolve().parent.parent

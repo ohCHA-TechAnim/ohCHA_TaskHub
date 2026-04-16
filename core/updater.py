@@ -1,28 +1,23 @@
 import urllib.request
 import json
-import zipfile
-import io
 import os
-import shutil
+import sys
+import subprocess
 import time
 from pathlib import Path
 from PySide6.QtCore import QThread, Signal
 
-# 다운로드용 깃허브 경로
-GITHUB_REPO = "ohCHA-TechAnim/ohCHA_TaskHub" 
+# 🔥 본인의 깃허브 정보
+GITHUB_REPO = "YourUsername/YourRepoName" 
 
-# 깃허브에 올릴 때는 이 숫자를 반드시 1.0.1 로 올려서 커밋해야 무한 루프에 빠지지 않습니다.
-CURRENT_VERSION = "1.0.3"
-
-# 현재 updater.py의 위치를 기반으로 앱의 최상위 폴더(main.py가 있는 곳)를 절대 경로로 찾습니다.
-BASE_DIR = Path(__file__).resolve().parent.parent
+# 내 앱의 버전
+CURRENT_VERSION = "1.0.4"
 
 class UpdateChecker(QThread):
     update_available = Signal(str, str, str)
 
     def run(self):
         try:
-            # 🔥 [핵심] 주소 맨 뒤에 '?t=시간' 을 붙여서 깃허브 캐시를 완벽히 무력화합니다!
             url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/version.json?t={int(time.time())}"
             req = urllib.request.Request(url, headers={'Cache-Control': 'no-cache'})
             
@@ -31,15 +26,15 @@ class UpdateChecker(QThread):
                 remote_version = data.get("version", "1.0.0")
                 notes = data.get("release_notes", "업데이트가 있습니다.")
                 
-                # 테스트 확인용 출력 (터미널에 뜹니다)
-                print(f"📡 깃허브 버전: {remote_version} / 내 버전: {CURRENT_VERSION}")
-                
                 if self.is_newer(remote_version, CURRENT_VERSION):
-                    download_url = f"https://github.com/{GITHUB_REPO}/archive/refs/heads/main.zip"
+                    # 🔥 [변경점] 소스코드(.zip)가 아니라, Releases에 올려둔 최신 EXE 파일의 다운로드 링크를 만듭니다!
+                    # 예: https://github.com/ohCHA/TaskHub/releases/download/v1.0.4/TaskHub.exe
+                    exe_name = "TaskHub.exe" # 깃허브 릴리즈에 올릴 고정된 파일 이름
+                    download_url = f"https://github.com/{GITHUB_REPO}/releases/download/v{remote_version}/{exe_name}"
+                    
                     self.update_available.emit(remote_version, notes, download_url)
         except Exception as e:
-            # 🔥 에러가 나면 터미널에 빨간 글씨로 이유를 알려줍니다.
-            print(f"❌ 업데이트 확인 실패: {e}")
+            print(f"업데이트 확인 실패: {e}")
 
     def is_newer(self, remote, local):
         try:
@@ -59,32 +54,49 @@ class UpdateDownloader(QThread):
 
     def run(self):
         try:
+            # 1. 내가 현재 실행 중인 파일의 절대 경로 찾기 (예: C:/바탕화면/TaskHub_v1.0.3.exe)
+            current_exe = sys.executable
+            
+            # 파이썬 스크립트 모드(python main.py)로 실행 중이면 업데이트 중단 (EXE 환경에서만 작동)
+            if not current_exe.endswith(".exe") or "python" in current_exe.lower():
+                self.finished.emit(False, "[개발 모드] EXE 빌드 버전에서만 자동 업데이트가 지원됩니다.\n깃허브에서 코드를 Pull 받아주세요.")
+                return
+
+            current_dir = os.path.dirname(current_exe)
+            current_name = os.path.basename(current_exe)
+            
+            # 2. 다운받을 새 파일의 임시 이름 (예: TaskHub_new.exe)
+            new_exe = os.path.join(current_dir, "TaskHub_new.exe")
+            
+            # 3. 깃허브 Releases에서 새 EXE 파일 다운로드
             req = urllib.request.Request(self.download_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=10) as response:
-                with zipfile.ZipFile(io.BytesIO(response.read())) as z:
-                    
-                    temp_dir = BASE_DIR / "update_temp"
-                    z.extractall(temp_dir)
-                    
-                    # 깃허브 압축 해제 시 생성되는 최상위 폴더 찾기
-                    extracted_folders = [f for f in os.listdir(temp_dir) if os.path.isdir(os.path.join(temp_dir, f))]
-                    if not extracted_folders:
-                        raise Exception("압축 해제된 폴더를 찾을 수 없습니다.")
-                        
-                    src_dir = os.path.join(temp_dir, extracted_folders[0])
-                    
-                    # 🔥 앱의 진짜 최상단 경로(BASE_DIR)로 파일 강제 덮어쓰기
-                    for item in os.listdir(src_dir):
-                        s = os.path.join(src_dir, item)
-                        d = os.path.join(BASE_DIR, item)
-                        if os.path.isdir(s):
-                            shutil.copytree(s, d, dirs_exist_ok=True)
-                        else:
-                            shutil.copy2(s, d)
-                            
-                    # 임시 폴더 삭제
-                    shutil.rmtree(temp_dir)
-                    
-            self.finished.emit(True, "업데이트 완료! 앱이 종료됩니다. 다시 실행해 주세요.")
+            with urllib.request.urlopen(req, timeout=30) as response, open(new_exe, 'wb') as out_file:
+                shutil.copyfileobj(response, out_file)
+
+            # 4. 🔥 [궁극의 마법] 자기 자신(.exe)은 실행 중일 때 지울 수 없으므로,
+            # 앱이 꺼진 직후에 구버전을 지우고 새 버전의 이름을 원래대로 바꾼 뒤 실행하는 .bat 파일을 만듭니다!
+            bat_path = os.path.join(current_dir, "update_script.bat")
+            
+            bat_content = f"""@echo off
+echo 업데이트 적용 중입니다. 잠시만 기다려주세요...
+timeout /t 2 /nobreak > NUL
+del "{current_name}"
+ren "TaskHub_new.exe" "{current_name}"
+start "" "{current_name}"
+del "%~f0"
+"""
+            with open(bat_path, "w", encoding="euc-kr") as f:
+                f.write(bat_content)
+
+            # 5. .bat 파일을 백그라운드로 실행하고 스레드 종료
+            subprocess.Popen([bat_path], shell=True)
+            
+            self.finished.emit(True, "업데이트 다운로드 완료!\n앱을 재시작하여 새 버전을 적용합니다.")
+            
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                self.finished.emit(False, "업데이트 실패: 깃허브 Releases에 해당 버전의 EXE 파일이 아직 업로드되지 않았습니다.")
+            else:
+                self.finished.emit(False, f"다운로드 오류: {e}")
         except Exception as e:
             self.finished.emit(False, f"업데이트 중 오류가 발생했습니다: {e}")

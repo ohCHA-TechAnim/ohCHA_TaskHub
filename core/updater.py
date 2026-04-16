@@ -4,6 +4,7 @@ import zipfile
 import io
 import os
 import shutil
+import time
 from pathlib import Path
 from PySide6.QtCore import QThread, Signal
 
@@ -11,7 +12,7 @@ from PySide6.QtCore import QThread, Signal
 GITHUB_REPO = "ohCHA-TechAnim/ohCHA_TaskHub" 
 
 # 깃허브에 올릴 때는 이 숫자를 반드시 1.0.1 로 올려서 커밋해야 무한 루프에 빠지지 않습니다.
-CURRENT_VERSION = "1.0.1"
+CURRENT_VERSION = "1.0.2"
 
 # 현재 updater.py의 위치를 기반으로 앱의 최상위 폴더(main.py가 있는 곳)를 절대 경로로 찾습니다.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,7 +22,8 @@ class UpdateChecker(QThread):
 
     def run(self):
         try:
-            url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/version.json"
+            # 🔥 [핵심] 주소 맨 뒤에 '?t=시간' 을 붙여서 깃허브 캐시를 완벽히 무력화합니다!
+            url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/version.json?t={int(time.time())}"
             req = urllib.request.Request(url, headers={'Cache-Control': 'no-cache'})
             
             with urllib.request.urlopen(req, timeout=5) as response:
@@ -29,11 +31,15 @@ class UpdateChecker(QThread):
                 remote_version = data.get("version", "1.0.0")
                 notes = data.get("release_notes", "업데이트가 있습니다.")
                 
+                # 테스트 확인용 출력 (터미널에 뜹니다)
+                print(f"📡 깃허브 버전: {remote_version} / 내 버전: {CURRENT_VERSION}")
+                
                 if self.is_newer(remote_version, CURRENT_VERSION):
                     download_url = f"https://github.com/{GITHUB_REPO}/archive/refs/heads/main.zip"
                     self.update_available.emit(remote_version, notes, download_url)
         except Exception as e:
-            print(f"업데이트 확인 실패: {e}")
+            # 🔥 에러가 나면 터미널에 빨간 글씨로 이유를 알려줍니다.
+            print(f"❌ 업데이트 확인 실패: {e}")
 
     def is_newer(self, remote, local):
         try:

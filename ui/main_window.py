@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QDesktopServices, QAction
 from PySide6.QtCore import QUrl
-
+from core.updater import UpdateChecker, UpdateDownloader, CURRENT_VERSION
 from ui.settings_dialog import SettingsDialog
 from core.preset_parser import PresetParser
 from core.database import Database
@@ -66,9 +66,10 @@ class MainWindow(QMainWindow):
         self.dynamic_inputs = {}
         self.search_worker = None
         self.config.config_changed.connect(self.on_config_changed)
-        self.setWindowTitle("TaskHub - Workspace Manager")
+        self.setWindowTitle(f"TaskHub - Workspace Manager (v{CURRENT_VERSION})")
         self.resize(1100, 750)
         self.setup_ui()
+        self.check_for_updates()
 
     def setup_ui(self):
         main_widget = QWidget()
@@ -371,3 +372,38 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def on_config_changed(self): self.build_folder_creator_ui()
+
+    def check_for_updates(self):
+        self.updater_thread = UpdateChecker()
+        self.updater_thread.update_available.connect(self.prompt_update)
+        self.updater_thread.start()
+
+    @Slot(str, str, str)
+    def prompt_update(self, version, notes, download_url):
+        reply = QMessageBox.question(
+            self, 
+            "새 업데이트 가능!", 
+            f"새로운 버전(v{version})이 출시되었습니다.\n지금 업데이트 하시겠습니까?\n\n[업데이트 내용]\n{notes}",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.start_download(download_url)
+
+    def start_download(self, download_url):
+        self.setEnabled(False)
+        self.setWindowTitle("다운로드 및 업데이트 중... 앱을 끄지 마세요.")
+        
+        self.download_thread = UpdateDownloader(download_url)
+        self.download_thread.finished.connect(self.on_update_finished)
+        self.download_thread.start()
+
+    @Slot(bool, str)
+    def on_update_finished(self, success, message):
+        if success:
+            QMessageBox.information(self, "업데이트 완료", message)
+            import sys
+            sys.exit(0) # 앱 강제 종료
+        else:
+            QMessageBox.critical(self, "업데이트 실패", message)
+            self.setEnabled(True)
+            self.setWindowTitle(f"TaskHub - Workspace Manager (v{CURRENT_VERSION})")
